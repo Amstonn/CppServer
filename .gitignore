@@ -1,0 +1,5 @@
+bin/
+temp/
+.vs/
+.git/
+*/.git/
