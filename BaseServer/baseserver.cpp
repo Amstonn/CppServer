@@ -6,6 +6,11 @@
 #include <iostream>
 #pragma comment(lib, "ws2_32.lib")
 
+//结构化返回数据
+struct DataPackage {
+	int age;
+	char name[32];
+};
 int main() {
 	WORD w = MAKEWORD(2, 2);
 	WSAData dt;
@@ -63,6 +68,10 @@ int main() {
 			}
 			else if (0 == strcmp(_recvBuff, "getAge")) {
 				strcpy_s(returnBuff, "我0岁了\n");
+			}
+			else if (0 == strcmp(_recvBuff, "getInfo")) {
+				DataPackage data = {41,"小王"};
+				send(_csock, (const char*) &data, sizeof(data), 0);
 			}
 			else {
 				strcpy_s(returnBuff, "我可以帮你做什么？\n");

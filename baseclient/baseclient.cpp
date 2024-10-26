@@ -6,6 +6,11 @@
 #include <iostream>
 
 #pragma comment(lib, "ws2_32.lib")
+//结构化数据
+struct DataPackage {
+	int age;
+	char name[32];
+};
 /**
 * 建立一个简易TCP客户端
 * 1.建立一个socket
@@ -54,8 +59,12 @@ int main() {
 		char recvBuf[128] = {};
 		//接收服务器信息 recv
 		int nlens = recv(_socket, recvBuf, 128, 0);
-		if (nlens > 0) {
+		if (0!=strcmp(cmdBuf, "getInfo") && nlens > 0) {
 			printf("收到数据：%s\n", recvBuf);
+		}
+		else {
+			DataPackage* data = (DataPackage*)recvBuf;
+			printf("接收到的数据： 年龄 %d  姓名  %s \n", data->age, data->name);
 		}
 	}
 	//关闭 socket closesocket
