@@ -6,11 +6,35 @@
 #include <iostream>
 
 #pragma comment(lib, "ws2_32.lib")
-//结构化数据
-struct DataPackage {
-	int age;
-	char name[32];
+enum CMD {
+	CMD_LOGIN, CMD_LOGINOUT, CMD_ERROR
 };
+struct DataHeader {
+	short dataLength;//数据长度
+	short cmd;//命令
+};
+
+//登陆结构体
+struct LoginData {
+	char userName[32];
+	char Passward[32];
+};
+
+//登陆返回结构体
+struct LoginResult {
+	int result;
+};
+
+//登出结构体
+struct LogoutData {
+	char userName[32];
+};
+
+//登出返回结构体
+struct LogOutResult {
+	int result;
+};
+
 /**
 * 建立一个简易TCP客户端
 * 1.建立一个socket
@@ -52,20 +76,46 @@ int main() {
 			printf("退出\n");
 			break;
 		}
+		else if (0 == strcmp(cmdBuf, "login")) {
+			//发送请求命令
+			LoginData login = {"amston", "amston"};
+			DataHeader header = {sizeof(login),CMD_LOGIN};
+			send(_socket,(char*)&header, sizeof(header), 0 );//请求头
+			send(_socket,(char *)&login, sizeof(login),0); //请求数据
+			//接收服务器返回的数据
+			DataHeader retheader = {};
+			LoginResult loginres = {};
+			recv(_socket,(char *)&retheader, sizeof(retheader), 0);
+			recv(_socket, (char*)&loginres, sizeof(loginres), 0);
+			printf("login result: %d \n", loginres.result);
+		}
+		else if (0 == strcmp(cmdBuf, "logout")) {
+			//发送请求命令
+			LogoutData logout = {"amston"};
+			DataHeader header = { sizeof(logout),CMD_LOGINOUT };
+			send(_socket, (char*)&header, sizeof(header), 0);//请求头
+			send(_socket, (char*)&logout, sizeof(logout), 0); //请求数据
+			//接收服务器返回的数据
+			DataHeader retheader = {};
+			LogOutResult logoutres = {};
+			recv(_socket, (char*)&retheader, sizeof(retheader), 0);
+			recv(_socket, (char*)&logoutres, sizeof(logoutres), 0);
+			printf("logout result:  %d  \n", logoutres.result);
+		}
 		else {
 			//发送指令
-			send(_socket, cmdBuf, strlen(cmdBuf) + 1, 0);
+			printf("不支持的命令");
 		}
-		char recvBuf[128] = {};
-		//接收服务器信息 recv
-		int nlens = recv(_socket, recvBuf, 128, 0);
-		if (0!=strcmp(cmdBuf, "getInfo") && nlens > 0) {
-			printf("收到数据：%s\n", recvBuf);
-		}
-		else {
-			DataPackage* data = (DataPackage*)recvBuf;
-			printf("接收到的数据： 年龄 %d  姓名  %s \n", data->age, data->name);
-		}
+		//char recvBuf[128] = {};
+		////接收服务器信息 recv
+		//int nlens = recv(_socket, recvBuf, 128, 0);
+		//if (0!=strcmp(cmdBuf, "getInfo") && nlens > 0) {
+		//	printf("收到数据：%s\n", recvBuf);
+		//}
+		//else {
+		//	DataPackage* data = (DataPackage*)recvBuf;
+		//	printf("接收到的数据： 年龄 %d  姓名  %s \n", data->age, data->name);
+		//}
 	}
 	//关闭 socket closesocket
 	closesocket(_socket);

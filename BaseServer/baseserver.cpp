@@ -6,11 +6,35 @@
 #include <iostream>
 #pragma comment(lib, "ws2_32.lib")
 
-//结构化返回数据
-struct DataPackage {
-	int age;
-	char name[32];
+enum CMD {
+	CMD_LOGIN,CMD_LOGINOUT,CMD_ERROR
 };
+struct DataHeader {
+	short dataLength;//数据长度
+	short cmd;//命令
+};
+
+//登陆结构体
+struct LoginData {
+	char userName[32];
+	char Passward[32];
+};
+
+//登陆返回结构体
+struct LoginResult {
+	int result;
+};
+
+//登出结构体
+struct LogoutData {
+	char userName[32];
+};
+
+//登出返回结构体
+struct LogOutResult {
+	int result;
+};
+
 int main() {
 	WORD w = MAKEWORD(2, 2);
 	WSAData dt;
@@ -54,29 +78,42 @@ int main() {
 	}
 	//接收客户端请求 处理并发送数据
 	while (true) {
-		char _recvBuff[128] = {};
-		int nLen = recv(_csock, _recvBuff, 128, 0);
+		DataHeader header = {};
+		int nLen = recv(_csock, (char *)&header, sizeof(header), 0);
 		if (nLen <= 0) {
 			printf("客户端没有发送有效命令");
 			break;
 		}
 		else {
-			printf("接收到消息：%s\n", _recvBuff);
-			char returnBuff[128] = {};
-			if (0 == strcmp(_recvBuff, "getName")) {
-				strcpy_s(returnBuff, "我是服务器\n");
+			printf("接收到消息：命令 %d  数据长度  %d \n", header.cmd, header.dataLength);
+			switch (header.cmd) {
+			case CMD_LOGIN:
+			{
+				LoginData login_data = {};
+				recv(_csock, (char*)&login_data, sizeof(LoginData), 0);
+				LoginResult login_res = {};
+				login_res.result = {1};
+				send(_csock, (char*)&header, sizeof(DataHeader), 0);
+				send(_csock, (char*)&login_res, sizeof(login_res), 0);
 			}
-			else if (0 == strcmp(_recvBuff, "getAge")) {
-				strcpy_s(returnBuff, "我0岁了\n");
+				break;
+			case CMD_LOGINOUT:
+			{
+				LogoutData logout = {};
+				recv(_csock, (char*)&logout, sizeof(LogoutData), 0);
+				LogOutResult logout_res = {};
+				logout_res.result = {1};
+				send(_csock, (char*)&header, sizeof(DataHeader), 0);
+				send(_csock, (char*)&logout_res, sizeof(LogOutResult), 0);
 			}
-			else if (0 == strcmp(_recvBuff, "getInfo")) {
-				DataPackage data = {41,"小王"};
-				send(_csock, (const char*) &data, sizeof(data), 0);
+				break;
+			defualt:
+				{
+					header.cmd = CMD_ERROR;
+					send(_csock, (char*)&header, sizeof(DataHeader), 0);
+				}
+				break;
 			}
-			else {
-				strcpy_s(returnBuff, "我可以帮你做什么？\n");
-			}
-			send(_csock, returnBuff, sizeof(returnBuff), 0);
 		}
 	}
 
