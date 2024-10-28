@@ -7,7 +7,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 enum CMD {
-	CMD_LOGIN,CMD_LOGINOUT,CMD_ERROR
+	CMD_LOGIN,CMD_LOGOUT,CMD_ERROR,CMD_LOGIN_RESULT,CMD_LOGOUT_RESULT
 };
 struct DataHeader {
 	short dataLength;//数据长度
@@ -15,23 +15,39 @@ struct DataHeader {
 };
 
 //登陆结构体
-struct LoginData {
+struct LoginData : public DataHeader{ //通过继承将头放入 组成消息体
+	LoginData() {
+		dataLength = sizeof(LoginData);
+		cmd = CMD_LOGIN;
+	}
 	char userName[32];
 	char Passward[32];
 };
 
 //登陆返回结构体
-struct LoginResult {
+struct LoginResult : public DataHeader {
+	LoginResult() {
+		dataLength = sizeof(LoginResult);
+		cmd = CMD_LOGIN_RESULT;
+	}
 	int result;
 };
 
 //登出结构体
-struct LogoutData {
+struct LogoutData : public DataHeader {
+	LogoutData() {
+		dataLength = sizeof(LogoutData);
+		cmd = CMD_LOGOUT;
+	}
 	char userName[32];
 };
 
 //登出返回结构体
-struct LogOutResult {
+struct LogOutResult : public DataHeader {
+	LogOutResult() {
+		dataLength = sizeof(LogOutResult);
+		cmd = CMD_LOGOUT_RESULT;
+	}
 	int result;
 };
 
@@ -85,25 +101,25 @@ int main() {
 			break;
 		}
 		else {
-			printf("接收到消息：命令 %d  数据长度  %d \n", header.cmd, header.dataLength);
 			switch (header.cmd) {
 			case CMD_LOGIN:
 			{
 				LoginData login_data = {};
-				recv(_csock, (char*)&login_data, sizeof(LoginData), 0);
-				LoginResult login_res = {};
-				login_res.result = {1};
-				send(_csock, (char*)&header, sizeof(DataHeader), 0);
+				//先前接收了一个DataHeader 所以这里需要做偏移  以获取剩余的数据
+				recv(_csock, (char*)&login_data + sizeof(DataHeader), sizeof(LoginData) - sizeof(DataHeader), 0);
+				printf("收到命令：CMD_LGOIN 数据长度：%d 用户名：%s\n", login_data.dataLength, login_data.userName);
+				LoginResult login_res;
+				login_res.result = 1;
 				send(_csock, (char*)&login_res, sizeof(login_res), 0);
 			}
 				break;
-			case CMD_LOGINOUT:
+			case CMD_LOGOUT:
 			{
 				LogoutData logout = {};
-				recv(_csock, (char*)&logout, sizeof(LogoutData), 0);
-				LogOutResult logout_res = {};
-				logout_res.result = {1};
-				send(_csock, (char*)&header, sizeof(DataHeader), 0);
+				recv(_csock, (char*)&logout + sizeof(DataHeader), sizeof(LogoutData) - sizeof(DataHeader), 0);
+				printf("收到命令：CMD_LOGOUT 用户名：%s\n", logout.userName);
+				LogOutResult logout_res;
+				logout_res.result = 1;
 				send(_csock, (char*)&logout_res, sizeof(LogOutResult), 0);
 			}
 				break;

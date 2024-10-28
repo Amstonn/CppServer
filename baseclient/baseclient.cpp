@@ -7,7 +7,7 @@
 
 #pragma comment(lib, "ws2_32.lib")
 enum CMD {
-	CMD_LOGIN, CMD_LOGINOUT, CMD_ERROR
+	CMD_LOGIN, CMD_LOGOUT, CMD_ERROR, CMD_LOGIN_RESULT, CMD_LOGOUT_RESULT
 };
 struct DataHeader {
 	short dataLength;//数据长度
@@ -15,25 +15,42 @@ struct DataHeader {
 };
 
 //登陆结构体
-struct LoginData {
+struct LoginData : public DataHeader { //通过继承将头放入 组成消息体
+	LoginData() {
+		dataLength = sizeof(LoginData);
+		cmd = CMD_LOGIN;
+	}
 	char userName[32];
 	char Passward[32];
 };
 
 //登陆返回结构体
-struct LoginResult {
+struct LoginResult : public DataHeader {
+	LoginResult() {
+		dataLength = sizeof(LoginResult);
+		cmd = CMD_LOGIN_RESULT;
+	}
 	int result;
 };
 
 //登出结构体
-struct LogoutData {
+struct LogoutData : public DataHeader {
+	LogoutData() {
+		dataLength = sizeof(LogoutData);
+		cmd = CMD_LOGOUT;
+	}
 	char userName[32];
 };
 
 //登出返回结构体
-struct LogOutResult {
+struct LogOutResult : public DataHeader {
+	LogOutResult() {
+		dataLength = sizeof(LogOutResult);
+		cmd = CMD_LOGOUT_RESULT;
+	}
 	int result;
 };
+
 
 /**
 * 建立一个简易TCP客户端
@@ -78,33 +95,28 @@ int main() {
 		}
 		else if (0 == strcmp(cmdBuf, "login")) {
 			//发送请求命令
-			LoginData login = {"amston", "amston"};
-			DataHeader header = {sizeof(login),CMD_LOGIN};
-			send(_socket,(char*)&header, sizeof(header), 0 );//请求头
+			LoginData login;
+			strcpy_s(login.userName, "amston");
+			strcpy_s(login.Passward, "amston");
 			send(_socket,(char *)&login, sizeof(login),0); //请求数据
 			//接收服务器返回的数据
-			DataHeader retheader = {};
 			LoginResult loginres = {};
-			recv(_socket,(char *)&retheader, sizeof(retheader), 0);
 			recv(_socket, (char*)&loginres, sizeof(loginres), 0);
 			printf("login result: %d \n", loginres.result);
 		}
 		else if (0 == strcmp(cmdBuf, "logout")) {
 			//发送请求命令
-			LogoutData logout = {"amston"};
-			DataHeader header = { sizeof(logout),CMD_LOGINOUT };
-			send(_socket, (char*)&header, sizeof(header), 0);//请求头
+			LogoutData logout;
+			strcpy_s(logout.userName, "amston");
 			send(_socket, (char*)&logout, sizeof(logout), 0); //请求数据
 			//接收服务器返回的数据
-			DataHeader retheader = {};
 			LogOutResult logoutres = {};
-			recv(_socket, (char*)&retheader, sizeof(retheader), 0);
 			recv(_socket, (char*)&logoutres, sizeof(logoutres), 0);
 			printf("logout result:  %d  \n", logoutres.result);
 		}
 		else {
 			//发送指令
-			printf("不支持的命令");
+			printf("不支持的命令\n");
 		}
 		//char recvBuf[128] = {};
 		////接收服务器信息 recv
