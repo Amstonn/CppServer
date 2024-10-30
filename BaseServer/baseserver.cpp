@@ -4,7 +4,10 @@
 #include <windows.h>
 #include <WinSock2.h>
 #include <iostream>
+#include<vector>
+using namespace std;
 #pragma comment(lib, "ws2_32.lib")
+
 
 enum CMD {
 	CMD_LOGIN,CMD_LOGOUT,CMD_ERROR,CMD_LOGIN_RESULT,CMD_LOGOUT_RESULT
@@ -51,6 +54,49 @@ struct LogOutResult : public DataHeader {
 	int result;
 };
 
+int process(SOCKET _csock) {
+	DataHeader header = {};
+	int nLen = recv(_csock, (char*)&header, sizeof(header), 0);
+	if (nLen <= 0) {
+		printf("客户端没有发送有效命令");
+		return -1;
+	}
+	else {
+		switch (header.cmd) {
+		case CMD_LOGIN:
+		{
+			LoginData login_data = {};
+			//先前接收了一个DataHeader 所以这里需要做偏移  以获取剩余的数据
+			recv(_csock, (char*)&login_data + sizeof(DataHeader), sizeof(LoginData) - sizeof(DataHeader), 0);
+			printf("收到命令：CMD_LGOIN 数据长度：%d 用户名：%s\n", login_data.dataLength, login_data.userName);
+			LoginResult login_res;
+			login_res.result = 1;
+			send(_csock, (char*)&login_res, sizeof(login_res), 0);
+		}
+		break;
+		case CMD_LOGOUT:
+		{
+			LogoutData logout = {};
+			recv(_csock, (char*)&logout + sizeof(DataHeader), sizeof(LogoutData) - sizeof(DataHeader), 0);
+			printf("收到命令：CMD_LOGOUT 用户名：%s\n", logout.userName);
+			LogOutResult logout_res;
+			logout_res.result = 1;
+			send(_csock, (char*)&logout_res, sizeof(LogOutResult), 0);
+		}
+		break;
+	defualt:
+		{
+			header.cmd = CMD_ERROR;
+			send(_csock, (char*)&header, sizeof(DataHeader), 0);
+		}
+		break;
+		}
+	}
+	return 0;
+}
+
+vector<SOCKET> fd;
+
 int main() {
 	WORD w = MAKEWORD(2, 2);
 	WSAData dt;
@@ -82,58 +128,50 @@ int main() {
 	else {
 		printf("端口监听成功\n");
 	}
-	//accept 等待客户端连接
-	sockaddr_in _csockaddr = {};
-	int clens = sizeof(_csockaddr);
-	SOCKET _csock = accept(_socket, (sockaddr*)&_csockaddr, &clens);
-	if (INVALID_SOCKET == _csock) {
-		printf("客户端Socket无效\n");
-	}
-	else {
-		printf("新客户端加入IP = %s\n", inet_ntoa(_csockaddr.sin_addr));
-	}
+	
 	//接收客户端请求 处理并发送数据
 	while (true) {
-		DataHeader header = {};
-		int nLen = recv(_csock, (char *)&header, sizeof(header), 0);
-		if (nLen <= 0) {
-			printf("客户端没有发送有效命令");
+		fd_set readfds;
+		FD_ZERO(&readfds); //初始化为空集合
+		FD_SET(_socket, &readfds);
+		for (auto filedis : fd) {
+			FD_SET(filedis, &readfds); //套接字加入到set集合
+		}
+		int ret = select(_socket + 1, &readfds, NULL,NULL,NULL);
+		if (ret < 0) {  //出错则跳出循环
+			perror("select error!");
 			break;
 		}
-		else {
-			switch (header.cmd) {
-			case CMD_LOGIN:
-			{
-				LoginData login_data = {};
-				//先前接收了一个DataHeader 所以这里需要做偏移  以获取剩余的数据
-				recv(_csock, (char*)&login_data + sizeof(DataHeader), sizeof(LoginData) - sizeof(DataHeader), 0);
-				printf("收到命令：CMD_LGOIN 数据长度：%d 用户名：%s\n", login_data.dataLength, login_data.userName);
-				LoginResult login_res;
-				login_res.result = 1;
-				send(_csock, (char*)&login_res, sizeof(login_res), 0);
+		if (FD_ISSET(_socket, &readfds)) {
+			//accept 等待客户端连接
+			sockaddr_in _csockaddr = {};
+			int clens = sizeof(_csockaddr);
+			SOCKET _csock = accept(_socket, (sockaddr*)&_csockaddr, &clens);
+			if (INVALID_SOCKET == _csock) {
+				printf("客户端Socket无效\n");
 			}
-				break;
-			case CMD_LOGOUT:
-			{
-				LogoutData logout = {};
-				recv(_csock, (char*)&logout + sizeof(DataHeader), sizeof(LogoutData) - sizeof(DataHeader), 0);
-				printf("收到命令：CMD_LOGOUT 用户名：%s\n", logout.userName);
-				LogOutResult logout_res;
-				logout_res.result = 1;
-				send(_csock, (char*)&logout_res, sizeof(LogOutResult), 0);
+			else {
+				printf("新客户端加入IP = %s\n", inet_ntoa(_csockaddr.sin_addr));
 			}
-				break;
-			defualt:
-				{
-					header.cmd = CMD_ERROR;
-					send(_csock, (char*)&header, sizeof(DataHeader), 0);
+			fd.push_back(_csock); //将新连接的客户端socket放到文件描述符中
+		}
+		for (int i = 0; i < fd.size(); i++) {
+			if (FD_ISSET(fd[i], &readfds)) {
+				if (-1 == process(fd[i])) {
+					auto iter = find(fd.begin(), fd.end(),fd[i]);
+					if (iter != fd.end()) {
+						fd.erase(iter);
+					}
 				}
-				break;
 			}
 		}
+		
 	}
 
 	//关闭socket
+	for (auto item : fd) {
+		closesocket(item);
+	}
 	closesocket(_socket);
 	WSACleanup();
 	printf("任务结束，关闭服务器。\n");
