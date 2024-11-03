@@ -10,7 +10,7 @@ using namespace std;
 
 
 enum CMD {
-	CMD_LOGIN,CMD_LOGOUT,CMD_ERROR,CMD_LOGIN_RESULT,CMD_LOGOUT_RESULT
+	CMD_LOGIN,CMD_LOGOUT,CMD_ERROR,CMD_LOGIN_RESULT,CMD_LOGOUT_RESULT,CMD_NEW_USER_JOIN
 };
 struct DataHeader {
 	short dataLength;//数据长度
@@ -52,6 +52,15 @@ struct LogOutResult : public DataHeader {
 		cmd = CMD_LOGOUT_RESULT;
 	}
 	int result;
+};
+//新用户加入
+struct NewUserJoin : public DataHeader {
+	NewUserJoin() {
+		dataLength = sizeof(NewUserJoin);
+		cmd = CMD_NEW_USER_JOIN;
+		sock = 0;
+	}
+	int sock;
 };
 
 int process(SOCKET _csock) {
@@ -137,7 +146,10 @@ int main() {
 		for (auto filedis : fd) {
 			FD_SET(filedis, &readfds); //套接字加入到set集合
 		}
-		int ret = select(_socket + 1, &readfds, NULL,NULL,NULL);
+		//非阻塞
+		timeval tval = { 0,0 };
+
+		int ret = select(_socket + 1, &readfds, NULL,NULL,&tval);
 		if (ret < 0) {  //出错则跳出循环
 			perror("select error!");
 			break;
@@ -152,6 +164,11 @@ int main() {
 			}
 			else {
 				printf("新客户端加入IP = %s\n", inet_ntoa(_csockaddr.sin_addr));
+				for (int n = (int)fd.size() - 1; n >= 0; n--) {
+					NewUserJoin userJoin;
+					userJoin.sock = _csock;
+					send(fd[n], (const char *) & userJoin, sizeof(userJoin), 0);
+				}
 			}
 			fd.push_back(_csock); //将新连接的客户端socket放到文件描述符中
 		}

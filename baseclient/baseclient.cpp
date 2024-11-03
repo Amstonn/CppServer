@@ -4,10 +4,12 @@
 #include <windows.h>
 #include <WinSock2.h>
 #include <iostream>
+#include <thread>
+
 
 #pragma comment(lib, "ws2_32.lib")
 enum CMD {
-	CMD_LOGIN, CMD_LOGOUT, CMD_ERROR, CMD_LOGIN_RESULT, CMD_LOGOUT_RESULT
+	CMD_LOGIN, CMD_LOGOUT, CMD_ERROR, CMD_LOGIN_RESULT, CMD_LOGOUT_RESULT, CMD_NEW_USER_JOIN
 };
 struct DataHeader {
 	short dataLength;//数据长度
@@ -51,6 +53,88 @@ struct LogOutResult : public DataHeader {
 	int result;
 };
 
+//新用户加入
+struct NewUserJoin : public DataHeader {
+	NewUserJoin() {
+		dataLength = sizeof(NewUserJoin);
+		cmd = CMD_NEW_USER_JOIN;
+		sock = 0;
+	}
+	int sock;
+};
+int process(SOCKET _csock) {
+	DataHeader header = {};
+	int nLen = recv(_csock, (char*)&header, sizeof(header), 0);
+	if (nLen <= 0) {
+		printf("与服务器的链接断开\n");
+		return -1;
+	}
+	else {
+		switch (header.cmd) {
+		case CMD_LOGIN_RESULT:
+		{
+			LoginResult login_res = {};
+			recv(_csock, (char*)&login_res + sizeof(DataHeader), sizeof(LoginResult) - sizeof(DataHeader), 0);
+			printf("收到服务端消息：LoginResult 数据长度：%d 最终结果：%d\n", login_res.dataLength, login_res.result);
+		}
+		break;
+		case CMD_LOGOUT_RESULT:
+		{
+			LogOutResult logout_res = {};
+			recv(_csock, (char*)&logout_res + sizeof(DataHeader), sizeof(LogoutData) - sizeof(DataHeader), 0);
+			printf("收到服务端消息：CMD_LOGOUT_RESULT 结果：%d\n", logout_res.result);
+		}
+		break;
+		case CMD_NEW_USER_JOIN: {
+			NewUserJoin newJoin = {};
+			recv(_csock, (char*)&newJoin + sizeof(DataHeader), sizeof(NewUserJoin) - sizeof(DataHeader), 0);
+			printf("收到服务端消息：CMD_NEW_USER_JOIN 结果：新客户端加入 socket:%d\n", newJoin.sock);
+		}
+		break;
+		defualt:
+			break;
+		}
+		return 0;
+	}
+}
+
+void cmdThread(void * arg) {
+	while (true) {
+		SOCKET _socket = *(SOCKET*)arg;
+		//输入请求命令
+		char cmdBuf[128] = {};
+		scanf_s("%s", cmdBuf, sizeof(cmdBuf));
+		if (0 == strcmp(cmdBuf, "exit")) {
+			printf("退出\n");
+			break;
+		}
+		else if (0 == strcmp(cmdBuf, "login")) {
+			//发送请求命令
+			LoginData login;
+			strcpy_s(login.userName, "amston");
+			strcpy_s(login.Passward, "amston");
+			send(_socket, (char*)&login, sizeof(login), 0); //请求数据
+			//接收服务器返回的数据
+			LoginResult loginres = {};
+			recv(_socket, (char*)&loginres, sizeof(loginres), 0);
+			printf("login result: %d \n", loginres.result);
+		}
+		else if (0 == strcmp(cmdBuf, "logout")) {
+			//发送请求命令
+			LogoutData logout;
+			strcpy_s(logout.userName, "amston");
+			send(_socket, (char*)&logout, sizeof(logout), 0); //请求数据
+			//接收服务器返回的数据
+			LogOutResult logoutres = {};
+			recv(_socket, (char*)&logoutres, sizeof(logoutres), 0);
+			printf("logout result:  %d  \n", logoutres.result);
+		}
+		else {
+			//发送指令
+			printf("不支持的命令\n");
+		}
+	}
+}
 
 /**
 * 建立一个简易TCP客户端
@@ -84,50 +168,25 @@ int main() {
 	else {
 		printf("Socket connect successfally!\n");
 	}
-
+	//多线程输入指令
+	std::thread subthread(cmdThread, &_socket);
+	subthread.detach();
 	while (true) {
-		//输入请求命令
-		char cmdBuf[128] = {};
-		scanf_s("%s", cmdBuf, sizeof(cmdBuf));
-		if (0 == strcmp(cmdBuf, "exit")) {
-			printf("退出\n");
+		fd_set fdset;
+		FD_ZERO(&fdset);
+		FD_SET(_socket, &fdset);
+		int res = select(_socket, &fdset, NULL, NULL, NULL);//第一个参数指示最大文件描述符，表示要扫描的范围
+		if (res < 0) {
+			printf("select结束\n");
 			break;
 		}
-		else if (0 == strcmp(cmdBuf, "login")) {
-			//发送请求命令
-			LoginData login;
-			strcpy_s(login.userName, "amston");
-			strcpy_s(login.Passward, "amston");
-			send(_socket,(char *)&login, sizeof(login),0); //请求数据
-			//接收服务器返回的数据
-			LoginResult loginres = {};
-			recv(_socket, (char*)&loginres, sizeof(loginres), 0);
-			printf("login result: %d \n", loginres.result);
+		if (FD_ISSET(_socket, &fdset)) {
+			FD_CLR(_socket, &fdset);
+			if (-1 == process(_socket)) {
+				printf("任务结束\n");
+				break;
+			}
 		}
-		else if (0 == strcmp(cmdBuf, "logout")) {
-			//发送请求命令
-			LogoutData logout;
-			strcpy_s(logout.userName, "amston");
-			send(_socket, (char*)&logout, sizeof(logout), 0); //请求数据
-			//接收服务器返回的数据
-			LogOutResult logoutres = {};
-			recv(_socket, (char*)&logoutres, sizeof(logoutres), 0);
-			printf("logout result:  %d  \n", logoutres.result);
-		}
-		else {
-			//发送指令
-			printf("不支持的命令\n");
-		}
-		//char recvBuf[128] = {};
-		////接收服务器信息 recv
-		//int nlens = recv(_socket, recvBuf, 128, 0);
-		//if (0!=strcmp(cmdBuf, "getInfo") && nlens > 0) {
-		//	printf("收到数据：%s\n", recvBuf);
-		//}
-		//else {
-		//	DataPackage* data = (DataPackage*)recvBuf;
-		//	printf("接收到的数据： 年龄 %d  姓名  %s \n", data->age, data->name);
-		//}
 	}
 	//关闭 socket closesocket
 	closesocket(_socket);
