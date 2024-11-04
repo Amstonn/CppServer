@@ -1,8 +1,19 @@
-#define WIN32_LEAN_AND_MEAN
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-#include <windows.h>
-#include <WinSock2.h>
+#ifdef _WIN32 | _WIN64
+	#define _CRT_SECURE_NO_WARNINGS 
+	#define WIN32_LEAN_AND_MEAN
+	#define _WINSOCK_DEPRECATED_NO_WARNINGS
+	#include <windows.h>
+	#include <WinSock2.h>
+#else
+	#include<unistd.h>
+	#include<arpa/inet.h>
+	#include<string.h>
+	#define SOCKET int
+	#define INVALID_SOCKET (SOCKET)(~0)
+	#define SOCKET_ERROR (-1)
+#endif
+
 #include <iostream>
 #include <thread>
 
@@ -90,7 +101,7 @@ int process(SOCKET _csock) {
 			recv(_csock, (char*)&newJoin + sizeof(DataHeader), sizeof(NewUserJoin) - sizeof(DataHeader), 0);
 			printf("收到服务端消息：CMD_NEW_USER_JOIN 结果：新客户端加入 socket:%d\n", newJoin.sock);
 		}
-		break;
+			break;
 		defualt:
 			break;
 		}
@@ -98,12 +109,12 @@ int process(SOCKET _csock) {
 	}
 }
 
-void cmdThread(void * arg) {
+void cmdThread(void* arg) {
 	while (true) {
 		SOCKET _socket = *(SOCKET*)arg;
 		//输入请求命令
 		char cmdBuf[128] = {};
-		scanf_s("%s", cmdBuf, sizeof(cmdBuf));
+		scanf("%s", cmdBuf);
 		if (0 == strcmp(cmdBuf, "exit")) {
 			printf("退出\n");
 			break;
@@ -111,8 +122,8 @@ void cmdThread(void * arg) {
 		else if (0 == strcmp(cmdBuf, "login")) {
 			//发送请求命令
 			LoginData login;
-			strcpy_s(login.userName, "amston");
-			strcpy_s(login.Passward, "amston");
+			strcpy(login.userName, "amston");
+			strcpy(login.Passward, "amston");
 			send(_socket, (char*)&login, sizeof(login), 0); //请求数据
 			//接收服务器返回的数据
 			LoginResult loginres = {};
@@ -122,7 +133,7 @@ void cmdThread(void * arg) {
 		else if (0 == strcmp(cmdBuf, "logout")) {
 			//发送请求命令
 			LogoutData logout;
-			strcpy_s(logout.userName, "amston");
+			strcpy(logout.userName, "amston");
 			send(_socket, (char*)&logout, sizeof(logout), 0); //请求数据
 			//接收服务器返回的数据
 			LogOutResult logoutres = {};
@@ -144,10 +155,11 @@ void cmdThread(void * arg) {
 * 4.关闭 socket closesocket
 **/
 int main() {
+#ifdef _WIN32 | _WIN64
 	WORD w = MAKEWORD(2, 2);
 	WSAData dt;
-	//初始化winsock环境
 	WSAStartup(w, &dt);
+#endif
 	//建立socket
 	SOCKET _socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (_socket == INVALID_SOCKET) {
@@ -160,7 +172,12 @@ int main() {
 	sockaddr_in _sin = {};
 	_sin.sin_family = AF_INET;
 	_sin.sin_port = htons(4567);
-	_sin.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+#ifdef _WIN32 | _WIN64
+	_sin.sin_addr.S_un.S_addr = inet_addr("192.168.0.105");
+#else
+	_sin.sin_addr.s_addr = inet_addr("192.168.0.105");
+#endif
+	
 	int ret = connect(_socket, (sockaddr*)&_sin, sizeof(_sin));
 	if (ret == SOCKET_ERROR) {
 		printf("Socket connect failed!\n");
@@ -189,8 +206,13 @@ int main() {
 		}
 	}
 	//关闭 socket closesocket
+#ifdef _WIN32 | _WIN64
 	closesocket(_socket);
 	WSACleanup();
+#else
+	close(_socket);
+#endif
+
 	printf("已退出，任务结束\n");
 	getchar();
 	return 0;
